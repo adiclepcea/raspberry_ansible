@@ -1,0 +1,12 @@
+hostname: eSensesPi2
+clientid: test1
+server: https://192.168.1.104:8080/hello
+mount_dir: /mnt/stick
+
+wifi:
+  country: RO
+  ssid: WiFiName
+  pass: SecretWIFIPass
+
+scripts:
+  limit_in_mb: 50

@@ -1,0 +1,19 @@
+---
+- name: Configure wifi
+  hosts: eSensesPi
+  vars_files:
+    - variables.yaml
+  tasks:
+    - name: Copy wpa_supplicant.conf
+      template:
+        src: templates/wpa_supplicant.conf.j2
+        dest: /etc/wpa_supplicant/wpa_supplicant.conf
+      become: True
+      become_method: sudo
+    - name: Restart wifi
+      command: "{{ item }} wlan0"
+      with_items:
+        - ifdown
+        - ifup
+      become: True
+      become_method: sudo

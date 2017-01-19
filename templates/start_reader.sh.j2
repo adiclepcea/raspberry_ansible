@@ -1,0 +1,25 @@
+#! /bin/bash
+
+cd {{ mount_dir }}
+
+online=$(ps aux | grep "sudo ./reader" | grep -v "grep")
+
+if [ -z "${1}" ]; then
+  if [ -z "$online" ]; then
+    echo "Starting reader"
+    sudo ./reader && echo $! > reader.pid
+  fi
+elif [ "${1}" == "status" ]; then
+  echo "Checking status"
+  if [ ! -z "$online" ]; then
+    echo "Running"
+    exit 0
+  fi
+elif [ "${1}" == "stop" ]; then
+  if [ ! -z "$online" ]; then
+    echo "Stopping"
+    if [ ! -f ./reader.pid ]; then
+      sudo killall -9 "./reader"
+    fi
+  fi
+fi

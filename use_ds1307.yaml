@@ -1,0 +1,40 @@
+---
+- name: Add ds1307 rtc
+  hosts: eSensesPi
+  vars_files:
+  - variables.yaml
+  tasks:
+  - name: Add dtoverlay
+    lineinfile: dest=/boot/config.txt line='dtoverlay=i2c-rtc,ds1307' state=present
+    become: True
+    become_method: sudo
+  - name: Restart {{ hostname }}
+    shell: reboot
+    become: True
+    become_method: sudo
+    async: 1
+    poll: 0
+    ignore_errors: true
+  - name: Wait for {{ ansible_ssh_host }} to restart
+    local_action: wait_for host="{{ ansible_ssh_host }}" delay=10 connect_timeout=5 state=started timeout=30
+  - name: Remove fake clock
+    apt: pkg={{ item }} state=absent purge=yes force=yes
+    with_items:
+      - fake-hwclock
+    become: True
+    become_method: sudo
+  - name: Update rc.d
+    shell: update-rc.d -f fake-hwclock remove
+    become: True
+    become_method: sudo
+  - name: Modify hwclock-set file
+    replace:
+      dest: /lib/udev/hwclock-set
+      regexp: "(if \\[ -e \\/run\\/udev\\/hwclock-set \\]; then\\s*exit 0\\s*fi)"
+      replace: "#if [ -e /run/udev/hwclock-set ]; then\n#    exit 0\n#fi"
+    become: True
+    become_method: sudo
+  - name: Write time to RTC
+    shell: hwclock -w
+    become: True
+    become_method: sudo

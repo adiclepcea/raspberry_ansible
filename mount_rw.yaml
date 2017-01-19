@@ -1,0 +1,10 @@
+---
+- name: Mount root system RW
+  hosts: eSensesPi
+  vars_files:
+  - variables.yaml
+  tasks:
+  - name: Mount / read-write
+    shell: mount -o remount,rw /
+    become: True
+    become_method: sudo

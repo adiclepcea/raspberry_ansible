@@ -1,0 +1,38 @@
+#! /bin/bash
+
+limit={{ scripts.limit_in_mb }}                #size in MB
+dir={{ mount_dir }}          #directory to check
+
+space=$(du -ms $dir | tr '\t' ' ' | tr -s " " | cut -d ' ' -f 1)
+
+echo "Space is now $space"
+
+while [ $space -gt $limit ]
+do
+
+  file_pool=$(ls 20*.txt | sort)
+
+  if [ -z "$file_pool" ]; then
+    logger "No file found to delete"
+    break
+  fi
+
+  for file in $file_pool
+  do
+    ksize=$(ls -l --block-size=M $dir/$file | tr '\t' ' ' | tr -s " " | cut -d ' ' -f 5)
+    ksize=${ksize::-1}
+
+    echo "Deleting $file with a size of $ksize"
+
+    rm $file
+
+    space=$(expr $space - $ksize)
+    if [ $space -lt $limit ]; then
+      break
+    fi
+  done
+
+  space=$(du -ms $dir | tr '\t' ' ' | tr -s " " | cut -d ' ' -f 1)
+
+  echo "Space is now $space"
+done

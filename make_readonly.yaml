@@ -1,0 +1,137 @@
+---
+- name: Make Raspberry file system read only
+  hosts: eSensesPi
+  vars_files:
+  - variables.yaml
+  tasks:
+  - name: Remove unneeded packages
+    apt: pkg={{ item }} state=absent purge=yes force=yes
+    with_items:
+      - triggerhappy
+      - anacron
+      - logrotate
+      - dphys-swapfile
+      - xserver-common
+      - lightdm
+    become: True
+    become_method: sudo
+  - name: Replace log management with busybox one
+    apt: pkg={{ item }} state=present force=yes
+    with_items:
+      - busybox-syslogd
+    become: True
+    become_method: sudo
+  - name: Purge rsyslog
+    shell: dpkg --purge rsyslog
+    become: True
+    become_method: sudo
+  - name: Add fastboot ro noswap to cmdline
+    shell: if cat /boot/cmdline.txt | grep -v "fastboot noswap ro"; then sudo echo $(cat /boot/cmdline.txt | grep -v "fastboot noswap ro") fastboot noswap ro > /boot/cmdline.txt ;fi
+    become: True
+    become_method: sudo
+  - name: Remove system files
+    file: path={{ item }} force=yes state=absent
+    with_items:
+      - /var/lib/dhcp
+      - /var/run
+      - /var/spool
+      - /var/lock
+      - /var/lib/systemd/random-seed
+    become: True
+    become_method: sudo
+  - name: Relink system files to tmpfs
+    file: path={{ item }} src=/tmp state=link
+    with_items:
+      - /var/lib/dhcp
+      - /var/run
+      - /var/lock
+    become: True
+    become_method: sudo
+  - name: Relink spool to stick-files
+    file:
+      path: /var/spool
+      src: "{{ mount_dir }}/spool"
+      state: link
+    become: True
+    become_method: sudo
+  - name: Chown pi for cron
+    file:
+      path: "{{ mount_dir }}/spool/cron"
+      owner: pi
+    become: True
+    become_method: sudo
+  - name: Create random-seed for initial linking
+    shell: echo "" > /tmp/random-seed
+    become: True
+    become_method: sudo
+  - name: Relink random-seed
+    file: path=/var/lib/systemd/random-seed src=/tmp/random-seed state=link
+    become: True
+    become_method: sudo
+  - name: Move dhcpd5 lock file to tmpfs
+    replace:
+      dest: /etc/systemd/system/dhcpcd5
+      regexp: ".*(PIDFile=\\/run\\/dhcpcd.pid).*"
+      replace: "PIDFile=/var/run/dhcpcd.pid"
+    become: True
+    become_method: sudo
+  - name: Ensure that the random-seed tmpfs file will be there
+    replace:
+      dest: /lib/systemd/system/systemd-random-seed.service
+      regexp: "RemainAfterExit=yes\nExecStart="
+      replace: "RemainAfterExit=yes\nExecStartPre=/bin/echo '' > /tmp/random-seed\nExecStart="
+    become: True
+    become_method: sudo
+  - name: Tell systemd we made changes
+    command: systemctl daemon-reload
+    become: True
+    become_method: sudo
+  - name: Redirect clock drift file
+    replace:
+      dest: /etc/ntp.conf
+      regexp: "driftfile /var/lib/ntp/ntp.drift"
+      replace: "driftfile /var/tmp/ntp.drift"
+    become: True
+    become_method: sudo
+  - name: Stop some services at boot
+    service: name={{ item }} enabled=no
+    with_items:
+      - bootlogs
+      - console-setup
+    become: True
+    become_method: sudo
+    ignore_errors: True
+  - name: Modify fstab step 1
+    replace:
+      dest: /etc/fstab
+      regexp: "^(.*\\/dev\\/mmcblk0p1.*\\/boot.*vfat.*defaults.*0.*2.*)$"
+      replace: "/dev/mmcblk0p1  /boot           vfat    defaults,ro          0       2"
+    become: True
+    become_method: sudo
+  - name: Modify fstab step 2
+    replace:
+      dest: /etc/fstab
+      regexp: "^(.*\\/dev\\/mmcblk0p2.*\\/.*ext4.*defaults,noatime.*0.*1.*)$"
+      replace: "/dev/mmcblk0p2  /               ext4    defaults,noatime,ro  0       1"
+    become: True
+    become_method: sudo
+  - name: Modify fstab step 3
+    lineinfile:
+      dest: "/etc/fstab"
+      state: "present"
+      line: "{{ item }}"
+    with_items:
+      - "tmpfs           /tmp            tmpfs   nosuid,nodev         0       0"
+      - "tmpfs           /var/log        tmpfs   nosuid,nodev         0       0"
+      - "tmpfs           /var/tmp        tmpfs   nosuid,nodev         0       0"
+    become: True
+    become_method: sudo
+  - name: Restart {{ hostname }}
+    shell: reboot
+    become: True
+    become_method: sudo
+    async: 1
+    poll: 0
+    ignore_errors: true
+  - name: Wait for {{ ansible_ssh_host }} to restart
+    local_action: wait_for host="{{ ansible_ssh_host }}" delay=10 connect_timeout=5 state=started timeout=30

@@ -1,0 +1,99 @@
+---
+- name: Prepare usb-stick as storage, install program
+  hosts: eSensesPi
+  vars_files:
+  - variables.yaml
+  tasks:
+  - name: Mkdir {{ mount_dir }}
+    file:
+      path: "{{ mount_dir }} "
+      owner: pi
+      group: pi
+      state: directory
+    become: True
+    become_method: sudo
+  - name: Mount Stick from /dev/sda
+    mount:
+      name: "{{ mount_dir }}"
+      src: /dev/sda1
+      fstype: ext3
+      state: present
+      opts: defaults,auto,rw
+    become: True
+    become_method: sudo
+  - name: Install tools
+    apt: pkg={{ item }} state=present force=yes update-cache=yes
+    with_items:
+      - git
+      - libcurl4-openssl-dev
+    become: True
+    become_method: sudo
+  - name: Restart {{ hostname }}
+    shell: sleep 2 && reboot
+    become: True
+    become_method: sudo
+    async: 1
+    poll: 0
+    ignore_errors: true
+  - name: Wait for {{ ansible_ssh_host }} to restart
+    local_action: wait_for host="{{ ansible_ssh_host }}" delay=10 connect_timeout=5 state=started timeout=30
+  - name: Change owner
+    file:
+      path: "{{ mount_dir }}"
+      owner: pi
+    become: True
+    become_method: sudo
+  - name: Copy start_reader
+    template:
+      src: templates/start_reader.sh.j2
+      dest: "{{ mount_dir }}/start_reader.sh"
+      mode: 0755
+  - name: Copy setup
+    template:
+      src: templates/setup.sh.j2
+      dest: "{{ mount_dir }}/setup.sh"
+      mode: 0755
+  - name: Copy config
+    template:
+      src: templates/config.ini.j2
+      dest: "{{ mount_dir }}/config.ini"
+  - name: Copy space_cleaner
+    template:
+      src: templates/space_cleaner.sh.j2
+      dest: "{{ mount_dir }}/space_cleaner.sh"
+      mode: 0755
+  - name: Run setup
+    shell: "{{ mount_dir }}/setup.sh"
+  - name: Copy certificates
+    copy:
+      src: files/{{ item }}
+      dest: "{{ mount_dir }}/certs"
+    with_items:
+      - ca-chain.cert.pem
+      - cert.pem
+      - key.pem
+  - name: Create service for reader
+    template:
+      src: templates/reader.service.j2
+      dest: /etc/systemd/system/reader.service
+      mode: 644
+    become: True
+    become_method: sudo
+  - name: Tell systemd to run the service
+    systemd:
+      state: started
+      daemon-reload: yes
+      name: reader
+      enabled: yes
+    become: True
+    become_method: sudo
+  - name: Make cleaning cron job
+    cron:
+      name: Clean usb-stick space
+      hour: 0
+      minute: 0
+      job: "{{ mount_dir }}/space_cleaner.sh"
+  - name: Copy cronfiles to stick
+    command: "cp -r /var/spool {{ mount_dir }}/"
+    become: True
+    become_method: sudo

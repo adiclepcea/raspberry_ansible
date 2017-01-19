@@ -1,0 +1,14 @@
+[Unit]
+Description=eSenses 485 termostat reader
+After=syslog.target network.target auditd.service
+
+[Service]
+ExecStart={{ mount_dir }}/start_reader.sh
+ExecStop={{ mount_dir }}/start_reader.sh stop
+KillMode=process
+Restart=always
+RestartSec=10
+PidFile={{ mount_dir }}/reader.pid
+
+[Install]
+WantedBy=multi-user.target

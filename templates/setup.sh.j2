@@ -1,0 +1,33 @@
+#! /bin/bash
+
+set -e
+
+pushd {{ mount_dir }}
+
+git clone https://github.com/adiclepcea/cobserver
+pushd cobserver
+git checkout develop
+make static
+popd
+
+git clone https://github.com/adiclepcea/term485rasp.git
+pushd term485rasp
+git checkout develop
+mv ../cobserver/libcobserver.a ./lib/
+make build
+popd
+
+mv term485rasp/reader ./reader
+
+rm -rf cobserver
+rm -rf term485rasp
+
+[ -f certs ] && rm certs
+
+[ -f cron ] && rm cron
+
+[ ! -d ./certs ] && mkdir certs
+
+[ ! -d ./cron ] && mkdir cron
+
+popd
