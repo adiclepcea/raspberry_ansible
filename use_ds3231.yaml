@@ -5,7 +5,7 @@
   - variables.yaml
   tasks:
   - name: Add dtoverlay
-    lineinfile: dest=/boot/config.txt line='dtoverlay=i2c-rtc,ds1307' state=present
+    lineinfile: dest=/boot/config.txt line='dtoverlay=i2c-rtc,ds3231' state=present
     become: True
     become_method: sudo
   - name: Restart {{ hostname }}

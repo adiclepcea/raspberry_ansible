@@ -4,12 +4,22 @@
   vars_files:
     - variables.yaml
   tasks:
+    - name: Copy interfaces.d
+      template:
+        src: templates/interfaces.d.j2
+        dest: /etc/network/interfaces.d/wlan0
+      become: True
     - name: Copy wpa_supplicant.conf
       template:
         src: templates/wpa_supplicant.conf.j2
         dest: /etc/wpa_supplicant/wpa_supplicant.conf
       become: True
-      become_method: sudo
+    - name: Enable wpa-config
+      service: 
+        name: wpa_supplicant
+        state: restarted
+        enabled: True
+      become: True
     - name: Restart wifi
       command: "{{ item }} wlan0"
       with_items:
